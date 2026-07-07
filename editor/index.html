@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor Algoritmic – Structuri Repetitive</title>
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Blockly -->
+  <script src="https://unpkg.com/blockly@10.4.3/blockly_compressed.js"></script>
+  <script src="https://unpkg.com/blockly@10.4.3/blocks_compressed.js"></script>
+  <script src="https://unpkg.com/blockly@10.4.3/javascript_compressed.js"></script>
+  <script src="https://unpkg.com/blockly@10.4.3/msg/ro.js"></script>
+
+  <!-- Mermaid for flowcharts -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Se încarcă editorul…</p>
+</div>
+
+<!-- Toast notification -->
+<div id="toast"></div>
+
+<!-- ======= NAVBAR ======= -->
+<nav id="navbar">
+  <div class="nav-left">
+    <button class="nav-btn" id="prev-btn" data-tooltip="Problema anterioară">← Anterior</button>
+    <select id="problem-select"></select>
+    <button class="nav-btn" id="next-btn" data-tooltip="Problema următoare">Următor →</button>
+    <span id="progress-text"></span>
+  </div>
+
+  <div class="nav-center">
+    <button class="mode-btn active" data-mode="blockly" data-tooltip="Editor vizual Blockly">🔷 Blockly</button>
+    <button class="mode-btn" data-mode="pseudo" data-tooltip="Editor pseudocod românesc">📝 Pseudocod</button>
+    <button class="mode-btn" data-mode="cpp" data-tooltip="Editor C++">⚙️ C++</button>
+  </div>
+
+  <div class="nav-right">
+    <button class="nav-btn" id="show-solution-btn" data-tooltip="Afișează soluția corectă">💡 Soluție</button>
+    <button class="nav-btn" id="reset-btn" data-tooltip="Resetează editorul">🗑 Reset</button>
+  </div>
+</nav>
+
+<!-- ======= APP BODY ======= -->
+<div id="app-body">
+  <div id="main-content">
+
+    <!-- ===== LEFT: Problem Panel ===== -->
+    <aside id="problem-panel">
+      <div id="problem-header">
+        <div id="problem-title-text"></div>
+        <span id="problem-id-badge"></span>
+      </div>
+      <div id="problem-body">
+        <div>
+          <div class="section-label">📋 Enunț</div>
+          <div id="problem-statement"></div>
+        </div>
+        <div id="flowchart-section">
+          <div class="section-label">📊 Diagramă logică</div>
+          <div id="flowchart-container">
+            <div id="flowchart-render" class="mermaid"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== CENTER: Editor Panel ===== -->
+    <main id="editor-panel">
+      <!-- Toolbar -->
+      <div id="editor-toolbar">
+        <span class="label">🖊 Editor</span>
+        <button class="toolbar-btn" id="undo-btn" data-tooltip="Anulează (Ctrl+Z)">↩ Undo</button>
+        <button class="toolbar-btn" id="redo-btn" data-tooltip="Refă (Ctrl+Y)">↪ Redo</button>
+        <div style="flex:1"></div>
+        <span id="sync-status" style="font-size:11px;color:var(--text-muted)"></span>
+        <button class="toolbar-btn primary" id="run-small-btn">▶ Rulează</button>
+      </div>
+
+      <!-- Blockly view -->
+      <div id="blockly-view" class="editor-view active">
+        <div id="blockly-workspace"></div>
+      </div>
+
+      <!-- Pseudocode view -->
+      <div id="pseudo-view" class="editor-view">
+        <textarea id="pseudo-editor" class="code-textarea"
+          spellcheck="false"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          placeholder="Scrie pseudocodul tău aici…&#10;&#10;Exemplu:&#10;citeste n&#10;pentru i = 1, n executa&#10;  scrie i"></textarea>
+      </div>
+
+      <!-- C++ view -->
+      <div id="cpp-view" class="editor-view">
+        <textarea id="cpp-editor" class="code-textarea"
+          spellcheck="false"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          placeholder="#include &lt;bits/stdc++.h&gt;&#10;using namespace std;&#10;&#10;int main() {&#10;    // Scrie codul tău&#10;    return 0;&#10;}"></textarea>
+      </div>
+    </main>
+
+    <!-- ===== RIGHT: Live Code Panel ===== -->
+    <aside id="code-panel">
+      <div class="code-panel-tabs">
+        <button class="code-panel-tab active" data-tab="live-pseudo">📝 Pseudocod</button>
+        <button class="code-panel-tab" data-tab="live-cpp">⚙️ C++</button>
+        <button class="code-panel-tab" data-tab="live-blockly">🔷 Blockly</button>
+      </div>
+
+      <!-- Live Pseudocode -->
+      <div id="live-pseudo" class="code-panel-view active live-code">
+        <button class="copy-btn" data-copy="pseudo">📋</button>
+        <div id="live-pseudo-content" class="code-output"></div>
+      </div>
+
+      <!-- Live C++ -->
+      <div id="live-cpp" class="code-panel-view live-code">
+        <button class="copy-btn" data-copy="cpp">📋</button>
+        <div id="live-cpp-content" class="code-output"></div>
+      </div>
+
+      <!-- Live Blockly preview (read-only small workspace) -->
+      <div id="live-blockly" class="code-panel-view">
+        <div id="blockly-preview" style="width:100%;height:100%;"></div>
+      </div>
+    </aside>
+
+  </div><!-- end main-content -->
+
+  <!-- ======= BOTTOM: Validation Panel ======= -->
+  <section id="validation-panel">
+    <div id="validation-header">
+      <h3>✅ Testare & Validare</h3>
+      <button id="run-btn">▶ Rulează Toate Testele</button>
+      <span id="score-badge"></span>
+    </div>
+    <div id="validation-body">
+      <div id="test-results">
+        <span style="color:var(--text-muted);font-size:12px">
+          Apasă "Rulează Toate Testele" pentru a verifica soluția ta.
+        </span>
+      </div>
+      <div id="test-detail">
+        <div id="test-detail-header">Selectează un test pentru detalii</div>
+        <div class="test-io-grid">
+          <div class="test-io-cell">
+            <div class="test-io-label">Input</div>
+            <div class="test-io-content" id="detail-input">—</div>
+          </div>
+          <div class="test-io-cell">
+            <div class="test-io-label">Output Așteptat</div>
+            <div class="test-io-content expected" id="detail-expected">—</div>
+          </div>
+          <div class="test-io-cell" style="grid-column:1/-1;border-top:1px solid var(--border)">
+            <div class="test-io-label">Output Obținut</div>
+            <div class="test-io-content" id="detail-actual">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- end app-body -->
+
+<!-- ======= BLOCKLY XML TOOLBOX ======= -->
+<xml id="toolbox" style="display:none">
+  <category name="📥 Intrare / Ieșire" colour="210">
+    <block type="cpp_input">
+      <field name="VARS">n</field>
+    </block>
+    <block type="cpp_output">
+      <value name="VALUE">
+        <block type="variables_get">
+          <field name="VAR">i</field>
+        </block>
+      </value>
+      <field name="NL">SPACE</field>
+    </block>
+    <block type="cpp_output">
+      <value name="VALUE">
+        <block type="variables_get">
+          <field name="VAR">i</field>
+        </block>
+      </value>
+      <field name="NL">NL</field>
+    </block>
+    <block type="cpp_output_text">
+      <field name="TEXT"> </field>
+    </block>
+  </category>
+
+  <category name="🔢 Variabile" colour="330" custom="VARIABLE">
+  </category>
+
+  <category name="📦 Declară Variabilă" colour="260">
+    <block type="cpp_declare">
+      <field name="TYPE">int</field>
+      <field name="VAR">n</field>
+      <value name="VALUE">
+        <block type="math_number"><field name="NUM">0</field></block>
+      </value>
+    </block>
+    <block type="cpp_declare">
+      <field name="TYPE">double</field>
+      <field name="VAR">x</field>
+      <value name="VALUE">
+        <block type="math_number"><field name="NUM">0</field></block>
+      </value>
+    </block>
+    <block type="cpp_declare">
+      <field name="TYPE">long long</field>
+      <field name="VAR">p</field>
+      <value name="VALUE">
+        <block type="math_number"><field name="NUM">1</field></block>
+      </value>
+    </block>
+  </category>
+
+  <category name="🔄 Repetitive" colour="120">
+    <block type="cpp_for_to">
+      <field name="VAR">i</field>
+      <field name="DIR">up</field>
+      <value name="FROM">
+        <block type="math_number"><field name="NUM">1</field></block>
+      </value>
+      <value name="TO">
+        <block type="variables_get"><field name="VAR">n</field></block>
+      </value>
+      <value name="STEP">
+        <block type="math_number"><field name="NUM">1</field></block>
+      </value>
+    </block>
+    <block type="cpp_for_to">
+      <field name="VAR">i</field>
+      <field name="DIR">down</field>
+      <value name="FROM">
+        <block type="variables_get"><field name="VAR">n</field></block>
+      </value>
+      <value name="TO">
+        <block type="math_number"><field name="NUM">1</field></block>
+      </value>
+      <value name="STEP">
+        <block type="math_number"><field name="NUM">1</field></block>
+      </value>
+    </block>
+    <block type="cpp_while">
+      <value name="COND">
+        <block type="logic_compare">
+          <field name="OP">NEQ</field>
+          <value name="A"><block type="variables_get"><field name="VAR">x</field></block></value>
+          <value name="B"><block type="math_number"><field name="NUM">0</field></block></value>
+        </block>
+      </value>
+    </block>
+    <block type="cpp_do_while">
+      <value name="COND">
+        <block type="logic_compare">
+          <field name="OP">NEQ</field>
+          <value name="A"><block type="variables_get"><field name="VAR">x</field></block></value>
+          <value name="B"><block type="math_number"><field name="NUM">0</field></block></value>
+        </block>
+      </value>
+    </block>
+  </category>
+
+  <category name="🔀 Condiții" colour="180">
+    <block type="controls_if"></block>
+    <block type="controls_if">
+      <mutation else="1"></mutation>
+    </block>
+    <block type="logic_compare">
+      <field name="OP">EQ</field>
+    </block>
+    <block type="logic_operation">
+      <field name="OP">AND</field>
+    </block>
+    <block type="logic_negate"></block>
+    <block type="logic_boolean">
+      <field name="BOOL">TRUE</field>
+    </block>
+  </category>
+
+  <category name="➕ Matematică" colour="60">
+    <block type="math_arithmetic">
+      <field name="OP">ADD</field>
+    </block>
+    <block type="math_arithmetic">
+      <field name="OP">MINUS</field>
+    </block>
+    <block type="math_arithmetic">
+      <field name="OP">MULTIPLY</field>
+    </block>
+    <block type="math_arithmetic">
+      <field name="OP">DIVIDE</field>
+    </block>
+    <block type="math_mod"></block>
+    <block type="math_sqrt"></block>
+    <block type="math_pow"></block>
+    <block type="math_abs"></block>
+    <block type="math_cast_int"></block>
+    <block type="math_number">
+      <field name="NUM">0</field>
+    </block>
+  </category>
+
+  <category name="📝 Incrementare" colour="290">
+    <block type="cpp_increment">
+      <field name="VAR">i</field>
+      <field name="OP">++</field>
+    </block>
+    <block type="cpp_increment">
+      <field name="VAR">i</field>
+      <field name="OP">--</field>
+    </block>
+    <block type="cpp_assign_op">
+      <field name="VAR">s</field>
+      <field name="OP">+=</field>
+      <value name="VALUE">
+        <block type="variables_get"><field name="VAR">x</field></block>
+      </value>
+    </block>
+    <block type="cpp_assign_op">
+      <field name="VAR">p</field>
+      <field name="OP">*=</field>
+      <value name="VALUE">
+        <block type="variables_get"><field name="VAR">x</field></block>
+      </value>
+    </block>
+  </category>
+</xml>
+
+<!-- ======= SCRIPTS ======= -->
+<script src="data/problems-raw.js"></script>
+<script src="data/solutions.js"></script>
+<script src="js/blocks.js"></script>
+<script src="js/generators.js"></script>
+<script src="js/interpreter.js"></script>
+<script src="js/cpp-parser.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
